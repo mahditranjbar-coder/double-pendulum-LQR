@@ -58,4 +58,4 @@ GitHub Pages using `.github/workflows/pages.yml`.
 
 ## License
 
-GPL-3.0. See `LICENSE`.
+MIT License. See `LICENSE`.
