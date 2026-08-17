@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="Interactive double inverted pendulum simulation with LQR and PD control."
+  />
+  <title>Double Inverted Pendulum on a Cart – LQR + PD</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel-bg: #020617;
+      --card-bg: #0b1220;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.2);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --danger: #f97373;
+      --radius: 12px;
+    }
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1e293b, #020617);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    header h1 {
+      font-size: 1.1rem;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    header span {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      gap: 12px;
+      padding: 10px;
+      overflow: hidden;
+    }
+    #canvas-container {
+      flex: 2;
+      background: radial-gradient(circle at top, #111827, #020617);
+      border-radius: var(--radius);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      overflow: hidden;
+    }
+    #pendulumCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #info-overlay {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      padding: 6px 10px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 10px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    #side-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+    }
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: #0f172a;
+      background: var(--accent);
+      box-shadow: 0 10px 25px rgba(56, 189, 248, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      box-shadow: none;
+    }
+    button.danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid rgba(248, 113, 113, 0.7);
+      box-shadow: none;
+    }
+    button:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.8);
+    }
+    .slider-group {
+      margin-bottom: 6px;
+    }
+    .slider-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      margin-bottom: 2px;
+    }
+    .slider-label-row span.value {
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 999px;
+      background: #1f2937;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      cursor: pointer;
+    }
+    .small-text {
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      margin-top: 4px;
+      font-size: 0.7rem;
+    }
+    .stat {
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      text-align: center;
+    }
+    .stat-label {
+      color: var(--muted);
+    }
+    .stat-value {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+    #forceCanvas {
+      width: 100%;
+      height: 80px;
+      margin-top: 8px;
+      background: #020617;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    @media (max-width: 900px) {
+      main {
+        flex-direction: column;
+      }
+      #canvas-container {
+        height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Double Inverted Pendulum on a Cart</h1>
+    <span>Nonlinear dynamics · PD / LQR · Live debugger</span>
+  </div>
+</header>
+
+<main>
+  <div id="canvas-container">
+    <canvas id="pendulumCanvas"></canvas>
+    <div id="info-overlay">
+      <div>Space: Start / Pause · R: Reset · M: PD / LQR</div>
+      <div>Adjust parameters and watch the force response F(t)</div>
+    </div>
+  </div>
+
+  <div id="side-panel">
+    <!-- Simulation Card -->
+    <div class="card">
+      <h2>Simulation</h2>
+      <div class="controls-row">
+        <button id="startPauseBtn">▶ Start</button>
+        <button class="secondary" id="resetBtn">⟳ Reset</button>
+        <button class="secondary" id="randomizeBtn">✦ Randomize angles</button>
+      </div>
+      <div class="controls-row" style="margin-top: 8px;">
+        <div class="slider-group" style="flex:1;">
+          <div class="slider-label-row">
+            <span>Time step dt (s)</span>
+            <span class="value" id="dtValue"></span>
+          </div>
+          <input type="range" id="dtSlider" min="0.001" max="0.02" step="0.001" value="0.005" />
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">θ₁ (deg)</div>
+          <div class="stat-value" id="theta1Stat">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">θ₂ (deg)</div>
+          <div class="stat-value" id="theta2Stat">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Cart x (m)</div>
+          <div class="stat-value" id="xStat">0.0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controller Gains -->
+    <div class="card">
+      <h2>Controller Gains (PD mode)</h2>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kp θ₁</span>
+          <span class="value" id="kp1Val"></span>
+        </div>
+        <input type="range" id="kp1" min="-200" max="200" step="1" value="80" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kd θ₁</span>
+          <span class="value" id="kd1Val"></span>
+        </div>
+        <input type="range" id="kd1" min="-40" max="40" step="0.5" value="20" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kp θ₂</span>
+          <span class="value" id="kp2Val"></span>
+        </div>
+        <input type="range" id="kp2" min="-200" max="200" step="1" value="40" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kd θ₂</span>
+          <span class="value" id="kd2Val"></span>
+        </div>
+        <input type="range" id="kd2" min="-40" max="40" step="0.5" value="10" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kp x</span>
+          <span class="value" id="kpxVal"></span>
+        </div>
+        <input type="range" id="kpx" min="-50" max="50" step="1" value="5" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Kd x</span>
+          <span class="value" id="kdxVal"></span>
+        </div>
+        <input type="range" id="kdx" min="-20" max="20" step="0.5" value="4" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Max |F| (N)</span>
+          <span class="value" id="fmaxVal"></span>
+        </div>
+        <input type="range" id="fmax" min="5" max="200" step="5" value="60" />
+      </div>
+    </div>
+
+    <!-- Physical Parameters -->
+    <div class="card">
+      <h2>Physical Parameters</h2>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Cart mass m (kg)</span>
+          <span class="value" id="mCartVal"></span>
+        </div>
+        <input type="range" id="mCart" min="0.5" max="5" step="0.1" value="1.0" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>m₁ (kg)</span>
+          <span class="value" id="m1Val"></span>
+        </div>
+        <input type="range" id="m1" min="0.2" max="3" step="0.1" value="0.8" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>m₂ (kg)</span>
+          <span class="value" id="m2Val"></span>
+        </div>
+        <input type="range" id="m2" min="0.2" max="3" step="0.1" value="0.5" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>ℓ₁ (m)</span>
+          <span class="value" id="l1Val"></span>
+        </div>
+        <input type="range" id="l1" min="0.3" max="2" step="0.05" value="1.0" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>ℓ₂ (m)</span>
+          <span class="value" id="l2Val"></span>
+        </div>
+        <input type="range" id="l2" min="0.3" max="2" step="0.05" value="0.7" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Damping cart</span>
+          <span class="value" id="d1Val"></span>
+        </div>
+        <input type="range" id="d1" min="0" max="5" step="0.1" value="0.3" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Damping θ₁</span>
+          <span class="value" id="d2Val"></span>
+        </div>
+        <input type="range" id="d2" min="0" max="5" step="0.1" value="0.05" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Damping θ₂</span>
+          <span class="value" id="d3Val"></span>
+        </div>
+        <input type="range" id="d3" min="0" max="5" step="0.1" value="0.05" />
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label-row">
+          <span>Gravity g (m/s²)</span>
+          <span class="value" id="gVal"></span>
+        </div>
+        <input type="range" id="g" min="0" max="20" step="0.5" value="9.81" />
+      </div>
+    </div>
+
+    <!-- LQR / PD Debugger -->
+    <div class="card">
+      <h2>Control Debugger</h2>
+      <div class="controls-row">
+        <button class="secondary" id="modeBtn">Mode: LQR</button>
+        <button class="secondary" id="recomputeLQRBtn">Recompute LQR</button>
+      </div>
+      <div class="small-text" style="margin-top:6px;">
+        LQR: u = −K·x, where x = [x, θ₁, θ₂, ẋ, ω₁, ω₂].<br />
+        Panel shows gain vector K and per-state force contributions.
+      </div>
+
+      <div class="stats-row" style="margin-top:6px;">
+        <div class="stat">
+          <div class="stat-label">Kx</div>
+          <div class="stat-value" id="KxVal">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Kθ₁</div>
+          <div class="stat-value" id="Kth1Val">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Kθ₂</div>
+          <div class="stat-value" id="Kth2Val">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Kẋ</div>
+          <div class="stat-value" id="KxdotVal">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Kω₁</div>
+          <div class="stat-value" id="Kw1Val">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Kω₂</div>
+          <div class="stat-value" id="Kw2Val">–</div>
+        </div>
+      </div>
+
+      <div class="stats-row" style="margin-top:6px;">
+        <div class="stat">
+          <div class="stat-label">F total (N)</div>
+          <div class="stat-value" id="FtotalVal">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fx</div>
+          <div class="stat-value" id="FxVal">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fθ₁</div>
+          <div class="stat-value" id="Fth1Val">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fθ₂</div>
+          <div class="stat-value" id="Fth2Val">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fẋ</div>
+          <div class="stat-value" id="FxdotVal">0.0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Fω (1+2)</div>
+          <div class="stat-value" id="FwVal">0.0</div>
+        </div>
+      </div>
+
+      <canvas id="forceCanvas"></canvas>
+    </div>
+  </div>
+</main>
+
+<script>
+  // --- Canvas setup ---
+  const canvas = document.getElementById('pendulumCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * devicePixelRatio;
+    canvas.height = rect.height * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // Force plot canvas
+  const forceCanvas = document.getElementById('forceCanvas');
+  const fctx = forceCanvas.getContext('2d');
+
+  function resizeForceCanvas() {
+    const rect = forceCanvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    forceCanvas.width = rect.width * devicePixelRatio;
+    forceCanvas.height = rect.height * devicePixelRatio;
+    fctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  window.addEventListener('resize', resizeForceCanvas);
+  resizeForceCanvas();
+
+  // --- Simulation state & parameters ---
+  const params = {
+    mCart: 1.0,
+    m1: 0.8,
+    m2: 0.5,
+    l1: 1.0,
+    l2: 0.7,
+    g: 9.81,
+    d1: 0.3,
+    d2: 0.05,
+    d3: 0.05
+  };
+
+  const gains = {
+    kp1: 80,
+    kd1: 20,
+    kp2: 40,
+    kd2: 10,
+    kpx: 5,
+    kdx: 4,
+    fmax: 60
+  };
+
+  let dt = 0.005;
+  let running = false;
+
+  // State vector x = [q, θ1, θ2, qdot, ω1, ω2]
+  let state = [0, 0.05, -0.1, 0, 0, 0]; // small initial perturbation
+  const target = { q: 0, th1: 0, th2: 0, qdot: 0, w1: 0, w2: 0 };
+
+  // Control mode & LQR
+  let useLQR = true;
+  let lqrK = null;
+
+  // Debug/plot
+  let lastControlForce = 0;
+  let lastControlBreakdown = null;
+  let forceHistory = [];
+  let forceTime = 0;
+
+  // --- Angle difference helper (wrap to [-π, π]) ---
+  function angleDiff(target, current) {
+    const diff = target - current;
+    return Math.atan2(Math.sin(diff), Math.cos(diff));
+  }
+
+  // --- Small matrix utilities for 6x6 system ---
+  function zeros(rows, cols) {
+    const A = new Array(rows);
+    for (let i = 0; i < rows; i++) {
+      A[i] = new Array(cols).fill(0);
+    }
+    return A;
+  }
+  function eye(n) {
+    const I = zeros(n, n);
+    for (let i = 0; i < n; i++) I[i][i] = 1;
+    return I;
+  }
+  function matCopy(A) {
+    return A.map(row => row.slice());
+  }
+  function matAdd(A, B) {
+    const rows = A.length, cols = A[0].length;
+    const C = zeros(rows, cols);
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        C[i][j] = A[i][j] + B[i][j];
+      }
+    }
+    return C;
+  }
+  function matSub(A, B) {
+    const rows = A.length, cols = A[0].length;
+    const C = zeros(rows, cols);
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        C[i][j] = A[i][j] - B[i][j];
+      }
+    }
+    return C;
+  }
+  function matScale(A, s) {
+    const rows = A.length, cols = A[0].length;
+    const C = zeros(rows, cols);
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        C[i][j] = s * A[i][j];
+      }
+    }
+    return C;
+  }
+  function matMul(A, B) {
+    const rows = A.length, cols = B[0].length, inner = B.length;
+    const C = zeros(rows, cols);
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        let sum = 0;
+        for (let k = 0; k < inner; k++) {
+          sum += A[i][k] * B[k][j];
+        }
+        C[i][j] = sum;
+      }
+    }
+    return C;
+  }
+  function matTranspose(A) {
+    const rows = A.length, cols = A[0].length;
+    const AT = zeros(cols, rows);
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        AT[i][j] = A[j][i];
+      }
+    }
+    return AT;
+  }
+  function matDiffNorm(A, B) {
+    let maxAbs = 0;
+    for (let i = 0; i < A.length; i++) {
+      for (let j = 0; j < A[0].length; j++) {
+        const d = Math.abs(A[i][j] - B[i][j]);
+        if (d > maxAbs) maxAbs = d;
+      }
+    }
+    return maxAbs;
+  }
+
+  // --- 3x3 matrix inverse + multiplication, used by dynamics ---
+  function inv3(m) {
+    const a = m[0][0], b = m[0][1], c = m[0][2];
+    const d = m[1][0], e = m[1][1], f = m[1][2];
+    const g = m[2][0], h = m[2][1], i = m[2][2];
+
+    const A =  (e * i - f * h);
+    const B = -(d * i - f * g);
+    const C =  (d * h - e * g);
+    const D = -(b * i - c * h);
+    const E =  (a * i - c * g);
+    const F = -(a * h - b * g);
+    const G =  (b * f - c * e);
+    const H = -(a * f - c * d);
+    const I =  (a * e - b * d);
+
+    const det = a * A + b * B + c * C;
+    if (Math.abs(det) < 1e-9) return null;
+
+    const invDet = 1 / det;
+    return [
+      [A * invDet, D * invDet, G * invDet],
+      [B * invDet, E * invDet, H * invDet],
+      [C * invDet, F * invDet, I * invDet]
+    ];
+  }
+
+  function mulMatVec(m, v) {
+    return [
+      m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+      m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+      m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2]
+    ];
+  }
+
+  // --- Dynamics: double inverted pendulum on cart ---
+  // x = [q, θ1, θ2, qdot, ω1, ω2], input F
+  function derivatives(x, F) {
+    let [q, th1, th2, qdot, w1, w2] = x;
+    const { mCart: m, m1, m2, l1, l2, g, d1, d2, d3 } = params;
+    th1 = - th1;
+    th2 = - th2;
+    const c1 = Math.cos(th1);
+    const s1 = Math.sin(th1);
+    const c2 = Math.cos(th2);
+    const s2 = Math.sin(th2);
+    const c12 = Math.cos(th1 - th2);
+    const s12 = Math.sin(th1 - th2);
+
+    // Mass matrix M(y) with y = [q, θ1, θ2]
+    const M = [
+      [m + m1 + m2,           l1 * (m1 + m2) * c1,         m2 * l2 * c2],
+      [l1 * (m1 + m2) * c1,   l1 * l1 * (m1 + m2),        l1 * l2 * m2 * c12],
+      [m2 * l2 * c2,          l1 * l2 * m2 * c12,         l2 * l2 * m2]
+    ];
+
+    // RHS vector f(y, ydot, u)
+    const v = [
+      l1 * (m1 + m2) * w1 * w1 * s1 + m2 * l2 * w2 * w2 * s2
+      - d1 * qdot + F,
+      -l1 * l2 * m2 * w2 * w2 * s12 + g * (m1 + m2) * l1 * s1
+      - d2 * w1,
+      l1 * l2 * m2 * w1 * w1 * s12 + g * l2 * m2 * s2
+      - d3 * w2
+    ];
+
+    const Minv = inv3(M);
+    let qdd = 0, w1dd = 0, w2dd = 0;
+    if (Minv) {
+      const acc = mulMatVec(Minv, v);
+      qdd = acc[0];
+      w1dd = acc[1];
+      w2dd = acc[2];
+    }
+
+    return [qdot, w1, w2, qdd, w1dd, w2dd];
+  }
+
+  // --- Linearization around upright equilibrium (x=0,u=0) ---
+  function linearizeAroundEquilibrium() {
+    const n = 6;
+    const x0 = [0, 0, 0, 0, 0, 0];
+    const u0 = 0;
+    const A = zeros(n, n);
+    const B = zeros(n, 1);
+
+    const eps = 1e-5;
+    const du  = 1e-5;
+
+    const f0 = derivatives(x0, u0);
+
+    for (let j = 0; j < n; j++) {
+      const xPlus  = x0.slice();
+      const xMinus = x0.slice();
+      xPlus[j]  += eps;
+      xMinus[j] -= eps;
+
+      const fPlus  = derivatives(xPlus,  u0);
+      const fMinus = derivatives(xMinus, u0);
+
+      for (let i = 0; i < n; i++) {
+        A[i][j] = (fPlus[i] - fMinus[i]) / (2 * eps);
+      }
+    }
+
+    const fPlusU  = derivatives(x0, u0 + du);
+    const fMinusU = derivatives(x0, u0 - du);
+    for (let i = 0; i < n; i++) {
+      B[i][0] = (fPlusU[i] - fMinusU[i]) / (2 * du);
+    }
+
+    return { A, B };
+  }
+
+  // --- Discrete-time LQR solver ---
+  function solveDLQR(Ad, Bd, Q, R) {
+    const n = Ad.length;
+    let P = matCopy(Q);
+    const AT = matTranspose(Ad);
+    const BT = matTranspose(Bd);
+    const maxIter = 500;
+    const tol = 1e-6;
+
+    for (let it = 0; it < maxIter; it++) {
+      const PA  = matMul(P, Ad);
+      const ATPA = matMul(AT, PA);
+
+      const PB  = matMul(P, Bd);
+      const BT_PB = matMul(BT, PB);
+
+      const Rplus = [[R[0][0] + BT_PB[0][0]]];
+      const Rinv  = [[1.0 / Rplus[0][0]]];
+
+      const BT_PA = matMul(BT, PA);
+      const PB_Rinv = matMul(PB, Rinv);
+      const PB_Rinv_BT_PA = matMul(PB_Rinv, BT_PA);
+
+      const Pnext = matAdd(Q, matSub(ATPA, PB_Rinv_BT_PA));
+
+      const diff = matDiffNorm(Pnext, P);
+      P = Pnext;
+      if (diff < tol) break;
+    }
+
+    const PB = matMul(P, Bd);
+    const BT_PB = matMul(matTranspose(Bd), PB);
+    const Rplus = [[R[0][0] + BT_PB[0][0]]];
+    const Rinv  = [[1.0 / Rplus[0][0]]];
+
+    const PA = matMul(P, Ad);
+    const BT_PA = matMul(matTranspose(Bd), PA);
+    const Kmat = matMul(Rinv, BT_PA);
+
+    return Kmat[0].slice(); // 1x6 -> [..]
+  }
+
+  // --- LQR weighting matrices & gain ---
+  // State: [x, θ1, θ2, xdot, ω1, ω2]
+  const Q = [
+    [  10,   0,   0,   0,   0,   0],
+    [  0, 60,   0,   0,   0,   0],
+    [  0,   0, 0,   0,   0,   0],
+    [  0,   0,   0,   0,   0,   0],
+    [  0,   0,   0,   0,  0,   0],
+    [  0,   0,   0,   0,   0,  0]
+  ];
+  const Rmat = [[0.1]];
+
+  function computeLQR() {
+    try {
+      const { A, B } = linearizeAroundEquilibrium();
+      const h = dt;
+      const I = eye(6);
+      const Ad = matAdd(I, matScale(A, h));
+      const Bd = matScale(B, h);
+      lqrK = solveDLQR(Ad, Bd, Q, Rmat);
+      console.log("LQR gain K:", lqrK);
+    } catch (e) {
+      console.error("LQR computation failed:", e);
+      lqrK = null;
+    }
+  }
+
+  // --- Controller: LQR or PD ---
+  function computeControlForce(x) {
+    const q    = x[0];
+    const th1  = x[1];
+    const th2  = x[2];
+    const qdot = x[3];
+    const w1   = x[4];
+    const w2   = x[5];
+
+    // LQR branch
+    if (useLQR && lqrK) {
+      const xRel = [
+        q,
+        angleDiff(0, th1),
+        angleDiff(0, th2),
+        qdot,
+        w1,
+        w2
+      ];
+
+      const labels = ["x", "th1", "th2", "xdot", "w1", "w2"];
+      const contributions = [];
+      let F = 0;
+      for (let i = 0; i < 6; i++) {
+        const ci = -lqrK[i] * xRel[i];
+        contributions.push(ci);
+        F += ci;
+      }
+
+      const maxF = gains.fmax;
+      if (F >  maxF) F =  maxF;
+      if (F < -maxF) F = -maxF;
+
+      lastControlForce = F;
+      lastControlBreakdown = {
+        mode: "LQR",
+        F,
+        labels,
+        contributions,
+        K: lqrK.slice(),
+        xRel: xRel.slice()
+      };
+      return F;
+    }
+
+    // PD branch
+    const e_th1 = angleDiff(target.th1, th1);
+    const e_th2 = angleDiff(target.th2, th2);
+    const e_w1   = target.w1   - w1;
+    const e_w2   = target.w2   - w2;
+    const e_x    = target.q    - q;
+    const e_xdot = target.qdot - qdot;
+
+    const F_th1P = gains.kp1 * e_th1;
+    const F_th1D = gains.kd1 * e_w1;
+    const F_th2P = gains.kp2 * e_th2;
+    const F_th2D = gains.kd2 * e_w2;
+    const F_xP   = gains.kpx * e_x;
+    const F_xD   = gains.kdx * e_xdot;
+
+    let F = F_th1P + F_th1D + F_th2P + F_th2D + F_xP + F_xD;
+
+    const maxF = gains.fmax;
+    if (F >  maxF) F =  maxF;
+    if (F < -maxF) F = -maxF;
+
+    lastControlForce = F;
+    lastControlBreakdown = {
+      mode: "PD",
+      F,
+      components: {
+        F_th1P, F_th1D, F_th2P, F_th2D, F_xP, F_xD
+      }
+    };
+    return F;
+  }
+
+  // --- RK4 integrator ---
+  function rk4Step(x, h) {
+    const F1 = computeControlForce(x);
+    const k1 = derivatives(x, F1);
+
+    const x2 = x.map((xi, i) => xi + 0.5 * h * k1[i]);
+    const F2 = computeControlForce(x2);
+    const k2 = derivatives(x2, F2);
+
+    const x3 = x.map((xi, i) => xi + 0.5 * h * k2[i]);
+    const F3 = computeControlForce(x3);
+    const k3 = derivatives(x3, F3);
+
+    const x4 = x.map((xi, i) => xi + h * k3[i]);
+    const F4 = computeControlForce(x4);
+    const k4 = derivatives(x4, F4);
+
+    return x.map((xi, i) =>
+      xi + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])
+    );
+  }
+
+  // --- Drawing of pendulum ---
+  function drawPendulum() {
+    const w = canvas.width / devicePixelRatio;
+    const h = canvas.height / devicePixelRatio;
+    ctx.clearRect(0, 0, w, h);
+
+    const trackHalfLength = 2.5;
+    const pixelsPerMeter = Math.min(
+      w / (2 * trackHalfLength + 1),
+      h / (2 * (params.l1 + params.l2 + 0.5))
+    );
+
+    const originX = w / 2;
+    const originY = h * 0.7;
+
+    const [q, th1, th2] = state;
+
+    const cartX = q;
+    const cartWidth = 0.4;
+    const cartHeight = 0.2;
+
+    const cartScreenX = originX + cartX * pixelsPerMeter;
+    const cartScreenY = originY;
+
+    // Track
+    ctx.strokeStyle = "#1f2933";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, originY + cartHeight * pixelsPerMeter / 2 + 4);
+    ctx.lineTo(w, originY + cartHeight * pixelsPerMeter / 2 + 4);
+    ctx.stroke();
+
+    // Cart
+    ctx.fillStyle = "#111827";
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2;
+    const cw = cartWidth * pixelsPerMeter;
+    const ch = cartHeight * pixelsPerMeter;
+    ctx.beginPath();
+    ctx.roundRect(cartScreenX - cw / 2, cartScreenY - ch / 2, cw, ch, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const pivotX = cartScreenX;
+    const pivotY = cartScreenY - ch / 2;
+
+    const x1 = cartX + params.l1 * Math.sin(th1);
+    const y1 = 0 - params.l1 * Math.cos(th1);
+
+    const x1s = originX + x1 * pixelsPerMeter;
+    const y1s = pivotY + y1 * pixelsPerMeter;
+
+    const x2 = x1 + params.l2 * Math.sin(th2);
+    const y2 = y1 - params.l2 * Math.cos(th2);
+
+    const x2s = originX + x2 * pixelsPerMeter;
+    const y2s = pivotY + y2 * pixelsPerMeter;
+
+    // First rod
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pivotX, pivotY);
+    ctx.lineTo(x1s, y1s);
+    ctx.stroke();
+
+    // Second rod
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x1s, y1s);
+    ctx.lineTo(x2s, y2s);
+    ctx.stroke();
+
+    // Masses
+    ctx.fillStyle = "#e5e7eb";
+    ctx.beginPath();
+    ctx.arc(x1s, y1s, 7, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = "#f97316";
+    ctx.beginPath();
+    ctx.arc(x2s, y2s, 7, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  // --- Force history and plot ---
+  function recordForce(F, dtFrame) {
+    forceTime += dtFrame;
+    forceHistory.push({ t: forceTime, F });
+    const windowSec = 5.0;
+    const cutoff = forceTime - windowSec;
+    while (forceHistory.length && forceHistory[0].t < cutoff) {
+      forceHistory.shift();
+    }
+  }
+
+  function drawForcePlot() {
+    const w = forceCanvas.width / devicePixelRatio;
+    const h = forceCanvas.height / devicePixelRatio;
+    fctx.clearRect(0, 0, w, h);
+
+    if (forceHistory.length < 2) return;
+
+    const t0 = forceHistory[0].t;
+    const t1 = forceHistory[forceHistory.length - 1].t;
+    const dtSpan = t1 - t0 || 1;
+
+    let Fmin = Infinity, Fmax = -Infinity;
+    for (const s of forceHistory) {
+      if (s.F < Fmin) Fmin = s.F;
+      if (s.F > Fmax) Fmax = s.F;
+    }
+    if (!isFinite(Fmin) || !isFinite(Fmax)) return;
+    if (Fmax === Fmin) {
+      Fmax += 1;
+      Fmin -= 1;
+    }
+
+    const pad = 4;
+    const innerW = w - 2 * pad;
+    const innerH = h - 2 * pad;
+
+    // Zero line
+    const zeroY = pad + innerH * (Fmax / (Fmax - Fmin));
+    fctx.strokeStyle = "#1f2937";
+    fctx.lineWidth = 1;
+    fctx.beginPath();
+    fctx.moveTo(0, zeroY);
+    fctx.lineTo(w, zeroY);
+    fctx.stroke();
+
+    // Force trace
+    fctx.strokeStyle = useLQR ? "#22c55e" : "#f97316";
+    fctx.lineWidth = 1.5;
+    fctx.beginPath();
+    forceHistory.forEach((s, idx) => {
+      const x = pad + innerW * ((s.t - t0) / dtSpan);
+      const y = pad + innerH * (1 - (s.F - Fmin) / (Fmax - Fmin));
+      if (idx === 0) fctx.moveTo(x, y);
+      else fctx.lineTo(x, y);
+    });
+    fctx.stroke();
+  }
+
+  // --- Debugger UI update ---
+  const KxVal     = document.getElementById("KxVal");
+  const Kth1Val   = document.getElementById("Kth1Val");
+  const Kth2Val   = document.getElementById("Kth2Val");
+  const KxdotVal  = document.getElementById("KxdotVal");
+  const Kw1Val    = document.getElementById("Kw1Val");
+  const Kw2Val    = document.getElementById("Kw2Val");
+  const FtotalVal = document.getElementById("FtotalVal");
+  const FxVal     = document.getElementById("FxVal");
+  const Fth1Val   = document.getElementById("Fth1Val");
+  const Fth2Val   = document.getElementById("Fth2Val");
+  const FxdotVal  = document.getElementById("FxdotVal");
+  const FwVal     = document.getElementById("FwVal");
+
+  function updateDebugger() {
+    if (useLQR && lqrK && lastControlBreakdown && lastControlBreakdown.mode === "LQR") {
+      const K = lastControlBreakdown.K;
+      KxVal.textContent    = K[0].toFixed(2);
+      Kth1Val.textContent  = K[1].toFixed(2);
+      Kth2Val.textContent  = K[2].toFixed(2);
+      KxdotVal.textContent = K[3].toFixed(2);
+      Kw1Val.textContent   = K[4].toFixed(2);
+      Kw2Val.textContent   = K[5].toFixed(2);
+
+      const c = lastControlBreakdown.contributions;
+      const Fx    = c[0];
+      const Fth1  = c[1];
+      const Fth2  = c[2];
+      const Fxdot = c[3];
+      const Fw1   = c[4];
+      const Fw2   = c[5];
+      const Fw    = Fw1 + Fw2;
+
+      FtotalVal.textContent = lastControlBreakdown.F.toFixed(2);
+      FxVal.textContent     = Fx.toFixed(2);
+      Fth1Val.textContent   = Fth1.toFixed(2);
+      Fth2Val.textContent   = Fth2.toFixed(2);
+      FxdotVal.textContent  = Fxdot.toFixed(2);
+      FwVal.textContent     = Fw.toFixed(2);
+    } else if (!useLQR && lastControlBreakdown && lastControlBreakdown.mode === "PD") {
+      // In PD mode we leave K entries as "–" and show aggregate F values
+      KxVal.textContent = Kth1Val.textContent = Kth2Val.textContent =
+        KxdotVal.textContent = Kw1Val.textContent = Kw2Val.textContent = "–";
+
+      FtotalVal.textContent = lastControlBreakdown.F.toFixed(2);
+      const c = lastControlBreakdown.components;
+      FxVal.textContent    = (c.F_xP + c.F_xD).toFixed(2);
+      Fth1Val.textContent  = (c.F_th1P + c.F_th1D).toFixed(2);
+      Fth2Val.textContent  = (c.F_th2P + c.F_th2D).toFixed(2);
+      FxdotVal.textContent = c.F_xD.toFixed(2);
+      FwVal.textContent    = (c.F_th1D + c.F_th2D).toFixed(2);
+    } else {
+      // No info yet
+      KxVal.textContent = Kth1Val.textContent = Kth2Val.textContent =
+        KxdotVal.textContent = Kw1Val.textContent = Kw2Val.textContent = "–";
+      FtotalVal.textContent = FxVal.textContent = Fth1Val.textContent =
+        Fth2Val.textContent = FxdotVal.textContent = FwVal.textContent = "0.0";
+    }
+  }
+
+  // --- Animation loop ---
+  let lastTime = null;
+  function loop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const frameDt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    if (running) {
+      let steps = Math.max(1, Math.floor(frameDt / dt));
+      const h = frameDt / steps;
+      for (let i = 0; i < steps; i++) {
+        state = rk4Step(state, h);
+        recordForce(lastControlForce, h);
+      }
+    }
+
+    updateStats();
+    drawPendulum();
+    drawForcePlot();
+    updateDebugger();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // --- UI wiring ---
+  function bindSlider(id, obj, key, format = v => v.toFixed(2), onChange) {
+    const el = document.getElementById(id);
+    const label = document.getElementById(id + "Val");
+    const update = () => {
+      let val = parseFloat(el.value);
+      obj[key] = val;
+      if (label) label.textContent = format(val);
+      if (onChange) onChange(val);
+    };
+    el.addEventListener("input", update);
+    update();
+  }
+
+  // Physical params: recompute LQR when these change
+  const recomputeLqrOnChange = () => computeLQR();
+
+  bindSlider("mCart", params, "mCart", v => v.toFixed(1), recomputeLqrOnChange);
+  bindSlider("m1", params, "m1", v => v.toFixed(1), recomputeLqrOnChange);
+  bindSlider("m2", params, "m2", v => v.toFixed(1), recomputeLqrOnChange);
+  bindSlider("l1", params, "l1", v => v.toFixed(2), recomputeLqrOnChange);
+  bindSlider("l2", params, "l2", v => v.toFixed(2), recomputeLqrOnChange);
+  bindSlider("d1", params, "d1", v => v.toFixed(2), recomputeLqrOnChange);
+  bindSlider("d2", params, "d2", v => v.toFixed(2), recomputeLqrOnChange);
+  bindSlider("d3", params, "d3", v => v.toFixed(2), recomputeLqrOnChange);
+  bindSlider("g", params, "g", v => v.toFixed(2), recomputeLqrOnChange);
+
+  // PD gains (no need to recompute LQR)
+  bindSlider("kp1", gains, "kp1", v => v.toFixed(0));
+  bindSlider("kd1", gains, "kd1");
+  bindSlider("kp2", gains, "kp2", v => v.toFixed(0));
+  bindSlider("kd2", gains, "kd2");
+  bindSlider("kpx", gains, "kpx", v => v.toFixed(0));
+  bindSlider("kdx", gains, "kdx");
+  bindSlider("fmax", gains, "fmax", v => v.toFixed(0));
+
+  const dtSlider = document.getElementById("dtSlider");
+  const dtValue = document.getElementById("dtValue");
+  function updateDt() {
+    dt = parseFloat(dtSlider.value);
+    dtValue.textContent = dt.toFixed(3);
+    computeLQR();
+  }
+  dtSlider.addEventListener("input", updateDt);
+  updateDt();
+
+  const startPauseBtn = document.getElementById("startPauseBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const randomizeBtn = document.getElementById("randomizeBtn");
+  const modeBtn = document.getElementById("modeBtn");
+  const recomputeLQRBtn = document.getElementById("recomputeLQRBtn");
+
+  function updateStartPauseLabel() {
+    startPauseBtn.textContent = running ? "⏸ Pause" : "▶ Start";
+  }
+  function updateModeLabel() {
+    modeBtn.textContent = useLQR ? "Mode: LQR" : "Mode: PD";
+  }
+
+  startPauseBtn.addEventListener("click", () => {
+    running = !running;
+    updateStartPauseLabel();
+  });
+
+  resetBtn.addEventListener("click", () => {
+    state = [0, 0.05, -0.05, 0, 0, 0];
+  });
+
+  randomizeBtn.addEventListener("click", () => {
+    const rand = () => (Math.random() - 0.5) * 0.4;
+    state[0] = 0;
+    state[1] = rand();
+    state[2] = rand();
+    state[3] = 0;
+    state[4] = 0;
+    state[5] = 0;
+  });
+
+  modeBtn.addEventListener("click", () => {
+    useLQR = !useLQR;
+    updateModeLabel();
+  });
+
+  recomputeLQRBtn.addEventListener("click", () => {
+    computeLQR();
+  });
+
+  // Keyboard shortcuts
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+      e.preventDefault();
+      running = !running;
+      updateStartPauseLabel();
+    } else if (e.key === "r" || e.key === "R") {
+      state = [0, 0.05, -0.05, 0, 0, 0];
+    } else if (e.key === "m" || e.key === "M") {
+      useLQR = !useLQR;
+      updateModeLabel();
+    }
+  });
+
+  // Stats display
+  const theta1Stat = document.getElementById("theta1Stat");
+  const theta2Stat = document.getElementById("theta2Stat");
+  const xStat = document.getElementById("xStat");
+
+  function updateStats() {
+    const [q, th1, th2] = state;
+    theta1Stat.textContent = (th1 * 180 / Math.PI).toFixed(1);
+    theta2Stat.textContent = (th2 * 180 / Math.PI).toFixed(1);
+    xStat.textContent = q.toFixed(2);
+  }
+
+  // Initial LQR computation and labels
+  computeLQR();
+  updateStartPauseLabel();
+  updateModeLabel();
+  updateStats();
+</script>
+</body>
+</html>
